@@ -1,4 +1,5 @@
-const API_URL = 'http://localhost:5000/api';
+// Use relative path instead of localhost
+const API_URL = '/api';
 
 const elements = {
     emergencyBtn: document.getElementById('emergencyBtn'),
@@ -48,7 +49,7 @@ function getUserLocation() {
             },
             (error) => {
                 let errorMessage;
-                switch(error.code) {
+                switch (error.code) {
                     case error.PERMISSION_DENIED:
                         errorMessage = 'Location permission denied';
                         break;
@@ -80,8 +81,8 @@ async function fetchResources(latitude, longitude) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            latitude: latitude,
-            longitude: longitude
+            latitude,
+            longitude
         })
     });
 
@@ -95,7 +96,8 @@ async function fetchResources(latitude, longitude) {
 // Display resources
 function displayResources(resources) {
     if (!resources || resources.length === 0) {
-        elements.resourcesList.innerHTML = '<p style="text-align: center; color: #666;">No resources found nearby</p>';
+        elements.resourcesList.innerHTML =
+            '<p style="text-align: center; color: #666;">No resources found nearby</p>';
         return;
     }
 
@@ -104,7 +106,12 @@ function displayResources(resources) {
             <h3>${resource.name}</h3>
             <p><strong>Type:</strong> ${resource.type}</p>
             <p><strong>Address:</strong> ${resource.address}</p>
-            ${resource.phone ? `<p><strong>Phone:</strong> <a href="tel:${resource.phone}" class="phone">${resource.phone}</a></p>` : ''}
+            ${resource.phone ? 
+                `<p><strong>Phone:</strong> 
+                    <a href="tel:${resource.phone}" class="phone">
+                        ${resource.phone}
+                    </a>
+                </p>` : ''}
             <p class="distance">📍 ${resource.distance.toFixed(2)} km away</p>
         </div>
     `).join('');
@@ -117,14 +124,11 @@ async function handleEmergency() {
     showStatus('Getting your location...', 'info');
 
     try {
-        // Get user location
         const location = await getUserLocation();
         showStatus('Location obtained. Fetching resources...', 'info');
 
-        // Fetch resources from backend
         const data = await fetchResources(location.latitude, location.longitude);
 
-        // Display results
         hideAllSections();
         showStatus(`Found ${data.resources.length} resources nearby`, 'success');
         elements.resultsContainer.style.display = 'block';
@@ -132,21 +136,20 @@ async function handleEmergency() {
 
     } catch (error) {
         console.error('Error:', error);
-        activateOfflineMode(error);
+        activateOfflineMode(error.message || error);
     }
 }
 
 // Event listener
 elements.emergencyBtn.addEventListener('click', handleEmergency);
 
-// Check connectivity on load
+// Connectivity checks
 window.addEventListener('load', () => {
     if (!navigator.onLine) {
         activateOfflineMode('No internet connection');
     }
 });
 
-// Monitor connectivity changes
 window.addEventListener('offline', () => {
     activateOfflineMode('Connection lost');
 });
