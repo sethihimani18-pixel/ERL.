@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Resource Locator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚨 Emergency Resource Locator</h1>
+            <p class="subtitle">Find nearest emergency services instantly</p>
+        </header>
+
+        <div class="emergency-mode">
+            <button id="emergencyBtn" class="btn-emergency">
+                EMERGENCY MODE
+            </button>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <div id="offlineMode" class="offline-container" style="display: none;">
+            <h2>⚠️ Offline Mode</h2>
+            <p>Unable to connect. Use these emergency numbers:</p>
+            <div class="emergency-numbers">
+                <a href="tel:108" class="emergency-number">
+                    <span class="number">108</span>
+                    <span class="label">Ambulance</span>
+                </a>
+                <a href="tel:100" class="emergency-number">
+                    <span class="number">100</span>
+                    <span class="label">Police</span>
+                </a>
+                <a href="tel:101" class="emergency-number">
+                    <span class="number">101</span>
+                    <span class="label">Fire</span>
+                </a>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="results-container" style="display: none;">
+            <h2>Nearest Resources</h2>
+            <div id="resourcesList"></div>
+        </div>
+
+        <div id="loadingSpinner" class="spinner" style="display: none;">
+            <div class="spinner-circle"></div>
+            <p>Locating resources...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

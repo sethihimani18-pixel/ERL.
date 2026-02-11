@@ -1,0 +1,145 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import sqlite3
+import ctypes
+import os
+
+app = Flask(__name__)
+CORS(app)
+
+DATABASE = 'emergency_resources.db'
+
+# -----------------------------
+# Load C Distance Library (Optional)
+# -----------------------------
+
+lib_path = './distance_calculator.so'  # Linux
+# lib_path = './distance_calculator.dylib'  # macOS
+# lib_path = './distance_calculator.dll'  # Windows
+
+if os.path.exists(lib_path):
+    distance_lib = ctypes.CDLL(lib_path)
+    distance_lib.haversine_distance.argtypes = [
+        ctypes.c_double, ctypes.c_double,
+        ctypes.c_double, ctypes.c_double
+    ]
+    distance_lib.haversine_distance.restype = ctypes.c_double
+else:
+    distance_lib = None
+    print("C library not found. Using Python fallback.")
+
+
+# -----------------------------
+# Database Connection
+# -----------------------------
+
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# -----------------------------
+# Distance Calculation (Fallback Python)
+# -----------------------------
+
+def calculate_distance_python(lat1, lon1, lat2, lon2):
+    from math import radians, sin, cos, sqrt, atan2
+
+    R = 6371.0  # Earth radius in km
+
+    lat1_rad = radians(lat1)
+    lon1_rad = radians(lon1)
+    lat2_rad = radians(lat2)
+    lon2_rad = radians(lon2)
+
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+
+    a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    return R * c
+
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    if distance_lib:
+        return distance_lib.haversine_distance(lat1, lon1, lat2, lon2)
+    else:
+        return calculate_distance_python(lat1, lon1, lat2, lon2)
+
+
+# -----------------------------
+# Routes
+# -----------------------------
+
+@app.route('/')
+def home():
+    return jsonify({
+        "message": "Emergency Resource Locator Backend Running"
+    })
+
+
+@app.route('/api/resources', methods=['POST'])
+def get_resources():
+    try:
+        data = request.get_json()
+
+        user_lat = data.get('latitude')
+        user_lon = data.get('longitude')
+
+        if user_lat is None or user_lon is None:
+            return jsonify({'error': 'Invalid location data'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM resources')
+        resources = cursor.fetchall()
+        conn.close()
+
+        resources_with_distance = []
+
+        for resource in resources:
+            distance = calculate_distance(
+                user_lat, user_lon,
+                resource['latitude'], resource['longitude']
+            )
+
+            resources_with_distance.append({
+                'id': resource['id'],
+                'name': resource['name'],
+                'type': resource['type'],
+                'address': resource['address'],
+                'phone': resource['phone'],
+                'latitude': resource['latitude'],
+                'longitude': resource['longitude'],
+                'distance': round(distance, 2)
+            })
+
+        resources_with_distance.sort(key=lambda x: x['distance'])
+
+        return jsonify({
+            'success': True,
+            'resources': resources_with_distance[:10]
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'c_library_loaded': distance_lib is not None
+    })
+
+
+# -----------------------------
+# Render-Compatible Run
+# -----------------------------
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
