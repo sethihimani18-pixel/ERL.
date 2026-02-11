@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import sqlite3
 import ctypes
@@ -73,11 +73,9 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 # Routes
 # -----------------------------
 
-@app.route('/')
+@app.route("/")
 def home():
-    return jsonify({
-        "message": "Emergency Resource Locator Backend Running"
-    })
+    return render_template("index.html")
 
 
 @app.route('/api/resources', methods=['POST'])
