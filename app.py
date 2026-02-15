@@ -7,31 +7,36 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-DATABASE = 'emergency_resources.db'
-
 # -----------------------------
-# Load C Distance Library (Optional)
+# Database Configuration
 # -----------------------------
 
-lib_path = './distance_calculator.so'  # Linux
-# lib_path = './distance_calculator.dylib'  # macOS
-# lib_path = './distance_calculator.dll'  # Windows
-
-if os.path.exists(lib_path):
-    distance_lib = ctypes.CDLL(lib_path)
-    distance_lib.haversine_distance.argtypes = [
-        ctypes.c_double, ctypes.c_double,
-        ctypes.c_double, ctypes.c_double
-    ]
-    distance_lib.haversine_distance.restype = ctypes.c_double
-else:
-    distance_lib = None
-    print("C library not found. Using Python fallback.")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, "emergency_resources.db")
 
 
-# -----------------------------
-# Database Connection
-# -----------------------------
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS resources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        address TEXT NOT NULL,
+        phone TEXT,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
 
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
@@ -40,7 +45,30 @@ def get_db_connection():
 
 
 # -----------------------------
-# Distance Calculation (Fallback Python)
+# C Distance Library (Optional)
+# -----------------------------
+
+lib_path = "./distance_calculator.dll"  # Windows DLL
+
+if os.path.exists(lib_path):
+    try:
+        distance_lib = ctypes.CDLL(lib_path)
+        distance_lib.haversine_distance.argtypes = [
+            ctypes.c_double, ctypes.c_double,
+            ctypes.c_double, ctypes.c_double
+        ]
+        distance_lib.haversine_distance.restype = ctypes.c_double
+        print("C distance library loaded successfully.")
+    except Exception as e:
+        print("Failed to load C library:", e)
+        distance_lib = None
+else:
+    distance_lib = None
+    print("C library not found. Using Python fallback.")
+
+
+# -----------------------------
+# Distance Calculation
 # -----------------------------
 
 def calculate_distance_python(lat1, lon1, lat2, lon2):
@@ -64,7 +92,10 @@ def calculate_distance_python(lat1, lon1, lat2, lon2):
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     if distance_lib:
-        return distance_lib.haversine_distance(lat1, lon1, lat2, lon2)
+        try:
+            return distance_lib.haversine_distance(lat1, lon1, lat2, lon2)
+        except:
+            return calculate_distance_python(lat1, lon1, lat2, lon2)
     else:
         return calculate_distance_python(lat1, lon1, lat2, lon2)
 
@@ -78,21 +109,21 @@ def home():
     return render_template("index.html")
 
 
-@app.route('/api/resources', methods=['POST'])
+@app.route("/api/resources", methods=["POST"])
 def get_resources():
     try:
         data = request.get_json()
 
-        user_lat = data.get('latitude')
-        user_lon = data.get('longitude')
+        user_lat = data.get("latitude")
+        user_lon = data.get("longitude")
 
         if user_lat is None or user_lon is None:
-            return jsonify({'error': 'Invalid location data'}), 400
+            return jsonify({"error": "Invalid location data"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM resources')
+        cursor.execute("SELECT * FROM resources")
         resources = cursor.fetchall()
         conn.close()
 
@@ -101,36 +132,37 @@ def get_resources():
         for resource in resources:
             distance = calculate_distance(
                 user_lat, user_lon,
-                resource['latitude'], resource['longitude']
+                resource["latitude"], resource["longitude"]
             )
 
             resources_with_distance.append({
-                'id': resource['id'],
-                'name': resource['name'],
-                'type': resource['type'],
-                'address': resource['address'],
-                'phone': resource['phone'],
-                'latitude': resource['latitude'],
-                'longitude': resource['longitude'],
-                'distance': round(distance, 2)
+                "id": resource["id"],
+                "name": resource["name"],
+                "type": resource["type"],
+                "address": resource["address"],
+                "phone": resource["phone"],
+                "latitude": resource["latitude"],
+                "longitude": resource["longitude"],
+                "distance": round(distance, 2)
             })
 
-        resources_with_distance.sort(key=lambda x: x['distance'])
+        resources_with_distance.sort(key=lambda x: x["distance"])
 
         return jsonify({
-            'success': True,
-            'resources': resources_with_distance[:10]
+            "success": True,
+            "resources": resources_with_distance[:10]
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print("Error:", e)
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/health', methods=['GET'])
+@app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({
-        'status': 'healthy',
-        'c_library_loaded': distance_lib is not None
+        "status": "healthy",
+        "c_library_loaded": distance_lib is not None
     })
 
 
@@ -138,6 +170,7 @@ def health_check():
 # Render-Compatible Run
 # -----------------------------
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
+
