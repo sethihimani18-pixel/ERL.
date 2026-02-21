@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import sqlite3
-import ctypes
 import os
 
 app = Flask(__name__)
@@ -45,33 +44,10 @@ def get_db_connection():
 
 
 # -----------------------------
-# C Distance Library (Optional)
+# Distance Calculation (Pure Python)
 # -----------------------------
 
-lib_path = "./distance_calculator.dll"  # Windows DLL
-
-if os.path.exists(lib_path):
-    try:
-        distance_lib = ctypes.CDLL(lib_path)
-        distance_lib.haversine_distance.argtypes = [
-            ctypes.c_double, ctypes.c_double,
-            ctypes.c_double, ctypes.c_double
-        ]
-        distance_lib.haversine_distance.restype = ctypes.c_double
-        print("C distance library loaded successfully.")
-    except Exception as e:
-        print("Failed to load C library:", e)
-        distance_lib = None
-else:
-    distance_lib = None
-    print("C library not found. Using Python fallback.")
-
-
-# -----------------------------
-# Distance Calculation
-# -----------------------------
-
-def calculate_distance_python(lat1, lon1, lat2, lon2):
+def calculate_distance(lat1, lon1, lat2, lon2):
     from math import radians, sin, cos, sqrt, atan2
 
     R = 6371.0  # Earth radius in km
@@ -88,16 +64,6 @@ def calculate_distance_python(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
     return R * c
-
-
-def calculate_distance(lat1, lon1, lat2, lon2):
-    if distance_lib:
-        try:
-            return distance_lib.haversine_distance(lat1, lon1, lat2, lon2)
-        except:
-            return calculate_distance_python(lat1, lon1, lat2, lon2)
-    else:
-        return calculate_distance_python(lat1, lon1, lat2, lon2)
 
 
 # -----------------------------
@@ -161,13 +127,12 @@ def get_resources():
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return jsonify({
-        "status": "healthy",
-        "c_library_loaded": distance_lib is not None
+        "status": "healthy"
     })
 
 
 # -----------------------------
-# Render-Compatible Run
+# Local Run (Render uses Gunicorn)
 # -----------------------------
 
 if __name__ == "__main__":
